@@ -2066,6 +2066,11 @@ impl Tty {
 
         for (node, device) in &self.devices {
             for (connector, crtc) in device.drm_scanner.crtcs() {
+                // Skip disconnected connectors.
+                if connector.state() != connector::State::Connected {
+                    continue;
+                }
+
                 let connector_name = format_connector_name(connector);
                 let physical_size = connector.size();
                 let output_name = device.known_crtc_name(&crtc, connector, disable_monitor_names);
