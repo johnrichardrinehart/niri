@@ -30,7 +30,8 @@ tracy-client = { version = "0.18.3", default-features = false }
 
 [workspace.dependencies.smithay]
 # version = "0.4.1"
-git = "https://github.com/Smithay/smithay.git"
+git = "https://github.com/johnrichardrinehart/smithay.git"
+branch = "feat/free_crtc_during_lock"
 # path = "../smithay"
 default-features = false
 
