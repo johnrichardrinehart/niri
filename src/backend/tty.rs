@@ -34,6 +34,7 @@ use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
 use smithay::backend::renderer::multigpu::{GpuManager, MultiFrame, MultiRenderer};
 use smithay::backend::renderer::{DebugFlags, ImportDma, ImportEgl, RendererSuper};
 use smithay::backend::session::libseat::LibSeatSession;
+use smithay::backend::session::logind::LogindSessionNotifier;
 use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::{self, UdevBackend, UdevEvent};
 use smithay::desktop::utils::OutputPresentationFeedback;
@@ -455,6 +456,22 @@ impl Tty {
             })
             .unwrap();
 
+        // Also insert the logind notifier to handle PrepareForSleep signals for suspend/hibernate.
+        // libseat doesn't fire session events for suspend/hibernate, only for VT switches.
+        match LogindSessionNotifier::new() {
+            Ok(logind_notifier) => {
+                event_loop
+                    .insert_source(logind_notifier, move |event, _, state| {
+                        state.backend.tty().on_session_event(&mut state.niri, event);
+                    })
+                    .unwrap();
+            }
+            Err(err) => {
+                warn!("error creating logind session notifier: {err:?}");
+                warn!("suspend/hibernate recovery may not work");
+            }
+        }
+
         let api = GbmGlesBackend::with_context_priority(ContextPriority::High);
         let gpu_manager = GpuManager::new(api).context("error creating the GPU manager")?;
 
@@ -714,6 +731,24 @@ impl Tty {
                 niri.notify_activity();
                 niri.monitors_active = true;
                 self.set_monitors_active(true);
+                niri.queue_redraw_all();
+            }
+            SessionEvent::PreparingSleep => {
+                debug!("system preparing for sleep");
+                // Nothing to do here, but could be useful for future enhancements
+            }
+            SessionEvent::ResumedFromSleep => {
+                debug!("system waking from sleep, refreshing connectors");
+                // Refresh connectors and reset surface state, similar to session resume.
+                // libseat doesn't fire session events for suspend/hibernate, so this is
+                // our chance to clean up stale DRM state.
+                for node in self.devices.keys().copied().collect::<Vec<_>>() {
+                    self.device_changed(node.dev_id(), niri, true);
+                }
+
+                self.refresh_ipc_outputs(niri);
+
+                niri.notify_activity();
                 niri.queue_redraw_all();
             }
         }

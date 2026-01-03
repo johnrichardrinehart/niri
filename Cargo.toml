@@ -30,14 +30,20 @@ tracy-client = { version = "0.18.3", default-features = false }
 
 [workspace.dependencies.smithay]
 # version = "0.4.1"
-git = "https://github.com/Smithay/smithay.git"
-# path = "../smithay"
+# git = "https://github.com/Smithay/smithay.git"
+git = "https://github.com/johnrichardrinehart/smithay"
+rev = "04e542fb03e275425e379cc5086a7ca047602605"
+# branch = "feat/prepare-for-sleep-session-event"
+# path = "/home/john/code/repos/github.com/Smithay/smithay"
 default-features = false
 
 [workspace.dependencies.smithay-drm-extras]
 # version = "0.1.0"
-git = "https://github.com/Smithay/smithay.git"
-# path = "../smithay/smithay-drm-extras"
+# git = "https://github.com/Smithay/smithay.git"
+git = "https://github.com/johnrichardrinehart/smithay"
+rev = "04e542fb03e275425e379cc5086a7ca047602605"
+# branch = "feat/prepare-for-sleep-session-event"
+# path = "/home/john/code/repos/github.com/Smithay/smithay/smithay-drm-extras"
 
 [package]
 name = "niri"
@@ -106,6 +112,7 @@ features = [
     "backend_gbm",
     "backend_libinput",
     "backend_session_libseat",
+    "backend_session_logind",
     "backend_udev",
     "backend_winit",
     "desktop",
