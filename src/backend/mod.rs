@@ -201,6 +201,18 @@ impl Backend {
         }
     }
 
+    /// Called when the system wakes from suspend/hibernate.
+    ///
+    /// This triggers a refresh of DRM connectors and resets surface state, which may not happen
+    /// automatically because libseat's session events don't fire for suspend/hibernate.
+    pub fn on_sleep_resume(&mut self, niri: &mut Niri) {
+        match self {
+            Backend::Tty(tty) => tty.on_sleep_resume(niri),
+            Backend::Winit(_) => (),
+            Backend::Headless(_) => (),
+        }
+    }
+
     pub fn tty_checked(&mut self) -> Option<&mut Tty> {
         if let Self::Tty(v) = self {
             Some(v)

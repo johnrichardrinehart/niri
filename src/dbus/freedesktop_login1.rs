@@ -1,9 +1,24 @@
 use futures_util::StreamExt;
 use zbus::fdo;
 use zbus::names::InterfaceName;
+use zbus::proxy;
+
+/// Proxy for the org.freedesktop.login1.Manager D-Bus interface.
+#[proxy(
+    interface = "org.freedesktop.login1.Manager",
+    default_service = "org.freedesktop.login1",
+    default_path = "/org/freedesktop/login1"
+)]
+trait Manager {
+    /// PrepareForSleep signal.
+    #[zbus(signal)]
+    fn prepare_for_sleep(&self, start: bool) -> zbus::Result<()>;
+}
 
 pub enum Login1ToNiri {
     LidClosedChanged(bool),
+    /// PrepareForSleep signal from logind. `true` = going to sleep, `false` = waking up.
+    PrepareForSleep(bool),
 }
 
 pub fn start(
@@ -11,8 +26,10 @@ pub fn start(
 ) -> anyhow::Result<zbus::blocking::Connection> {
     let conn = zbus::blocking::Connection::system()?;
 
+    // Spawn task to monitor property changes (LidClosed).
     let async_conn = conn.inner().clone();
-    let future = async move {
+    let to_niri_clone = to_niri.clone();
+    let props_future = async move {
         let proxy = fdo::PropertiesProxy::new(
             &async_conn,
             "org.freedesktop.login1",
@@ -53,7 +70,7 @@ pub fn start(
             .and_then(|value| bool::try_from(value).ok())
             .unwrap_or_default();
 
-        if let Err(err) = to_niri.send(Login1ToNiri::LidClosedChanged(lid_closed)) {
+        if let Err(err) = to_niri_clone.send(Login1ToNiri::LidClosedChanged(lid_closed)) {
             warn!("error sending initial lid state to niri: {err:?}");
             return;
         };
@@ -88,7 +105,7 @@ pub fn start(
             }
 
             lid_closed = new_lid_closed;
-            if let Err(err) = to_niri.send(Login1ToNiri::LidClosedChanged(lid_closed)) {
+            if let Err(err) = to_niri_clone.send(Login1ToNiri::LidClosedChanged(lid_closed)) {
                 warn!("error sending message to niri: {err:?}");
                 return;
             };
@@ -98,7 +115,54 @@ pub fn start(
     let task = conn
         .inner()
         .executor()
-        .spawn(future, "monitor login1 property changes");
+        .spawn(props_future, "monitor login1 property changes");
+    task.detach();
+
+    // Spawn task to monitor PrepareForSleep signal.
+    let async_conn = conn.inner().clone();
+    let sleep_future = async move {
+        let manager_proxy = match ManagerProxy::new(&async_conn).await {
+            Ok(x) => x,
+            Err(err) => {
+                warn!("error creating ManagerProxy: {err:?}");
+                return;
+            }
+        };
+
+        let mut prepare_for_sleep = match manager_proxy.receive_prepare_for_sleep().await {
+            Ok(x) => x,
+            Err(err) => {
+                warn!("error subscribing to PrepareForSleep: {err:?}");
+                return;
+            }
+        };
+
+        while let Some(signal) = prepare_for_sleep.next().await {
+            let args = match signal.args() {
+                Ok(args) => args,
+                Err(err) => {
+                    warn!("error parsing PrepareForSleep args: {err:?}");
+                    return;
+                }
+            };
+
+            let start = args.start;
+            debug!(
+                "PrepareForSleep: {}",
+                if start { "going to sleep" } else { "waking up" }
+            );
+
+            if let Err(err) = to_niri.send(Login1ToNiri::PrepareForSleep(start)) {
+                warn!("error sending PrepareForSleep to niri: {err:?}");
+                return;
+            };
+        }
+    };
+
+    let task = conn
+        .inner()
+        .executor()
+        .spawn(sleep_future, "monitor login1 PrepareForSleep signal");
     task.detach();
 
     Ok(conn)

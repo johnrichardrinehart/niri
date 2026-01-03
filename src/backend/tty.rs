@@ -2309,6 +2309,27 @@ impl Tty {
         false
     }
 
+    /// Called when the system wakes from suspend/hibernate.
+    ///
+    /// This triggers a refresh of DRM connectors and resets surface state, similar to what
+    /// happens during session resume. libseat doesn't send session events for suspend/hibernate,
+    /// so we need to handle the `PrepareForSleep` D-Bus signal from logind separately.
+    pub fn on_sleep_resume(&mut self, niri: &mut Niri) {
+        let _span = tracy_client::span!("Tty::on_sleep_resume");
+
+        debug!("refreshing connectors after sleep resume");
+
+        for node in self.devices.keys().copied().collect::<Vec<_>>() {
+            // Refresh connectors with cleanup enabled, similar to session resume.
+            self.device_changed(node.dev_id(), niri, true);
+        }
+
+        self.refresh_ipc_outputs(niri);
+
+        niri.notify_activity();
+        niri.queue_redraw_all();
+    }
+
     pub fn on_output_config_changed(&mut self, niri: &mut Niri) {
         let _span = tracy_client::span!("Tty::on_output_config_changed");
 
