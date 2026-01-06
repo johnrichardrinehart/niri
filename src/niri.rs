@@ -2377,10 +2377,29 @@ impl State {
 
     #[cfg(feature = "dbus")]
     pub fn on_login1_msg(&mut self, msg: Login1ToNiri) {
-        let Login1ToNiri::LidClosedChanged(is_closed) = msg;
-
-        trace!("login1 lid {}", if is_closed { "closed" } else { "opened" });
-        self.set_lid_closed(is_closed);
+        match msg {
+            Login1ToNiri::LidClosedChanged(is_closed) => {
+                trace!("login1 lid {}", if is_closed { "closed" } else { "opened" });
+                self.set_lid_closed(is_closed);
+            }
+            Login1ToNiri::LockRequested => {
+                trace!("login1 requested screen lock");
+                // Unfortunately we can't directly create a SessionLocker from here,
+                // as it requires the session_lock protocol to be initiated by a client.
+                // Log this as informational and suggest using standard lock command.
+                info!("Received logind Lock signal, but can't initiate session lock directly");
+                info!("The session lock protocol requires a lock screen client to connect first");
+                info!("Use your configured lock command (e.g., hyprlock) directly instead");
+            }
+            Login1ToNiri::UnlockRequested => {
+                trace!("login1 requested screen unlock");
+                // Niri doesn't have a direct way to unlock the screen via code
+                // as it's normally handled by the lock screen client (e.g., swaylock)
+                // closing, which is detected by Smithay. However, we'll log this
+                // event for debugging purposes.
+                warn!("Received logind unlock request, but automatic unlocking is not supported");
+            }
+        }
     }
 
     #[cfg(feature = "dbus")]
