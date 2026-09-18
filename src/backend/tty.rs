@@ -790,9 +790,16 @@ impl Tty {
             // Software EGL devices (e.g., llvmpipe/softpipe) are rejected for now. They have some
             // problems (segfault on importing dmabufs from other renderers) and need to be
             // excluded from some places like DRM leasing.
+            //
+            // A guest on a hypervisor that cannot pass a GPU through has nothing else on offer:
+            // QEMU's virtio-gpu without virglrenderer leaves Mesa on llvmpipe, and Niri would
+            // otherwise come up with no renderer at all. NIRI_ALLOW_SOFTWARE_EGL opts back in and
+            // accepts the caveats above. Leave it unset on real hardware, where a software device
+            // means something has gone wrong and the rejection is the useful behaviour.
             ensure!(
-                !egl_device.is_software(),
-                "software EGL renderers are skipped"
+                !egl_device.is_software() || std::env::var_os("NIRI_ALLOW_SOFTWARE_EGL").is_some(),
+                "software EGL renderers are skipped \
+                 (set NIRI_ALLOW_SOFTWARE_EGL=1 to use them anyway)"
             );
 
             let render_node = egl_device
