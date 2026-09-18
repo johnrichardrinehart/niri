@@ -2785,6 +2785,15 @@ fn primary_node_from_render_node(path: &Path) -> Option<(DrmNode, DrmNode)> {
             } else {
                 warn!("DRM node {path:?} is not a render node");
 
+                // A software EGL device (QEMU's virtio-gpu with no virglrenderer behind it)
+                // advertises a render node that cannot back a renderer: Smithay ends up
+                // registering the GPU under the primary node while Niri looks it up under the
+                // render node and finds nothing. Where NIRI_ALLOW_SOFTWARE_EGL says we are in
+                // that situation, take the configured node at face value instead.
+                if std::env::var_os("NIRI_ALLOW_SOFTWARE_EGL").is_some() {
+                    return Some((node, node));
+                }
+
                 // Gracefully handle misconfiguration on regular desktop systems.
                 if let Some(Ok(render_node)) = node.node_with_type(NodeType::Render) {
                     return Some((node, render_node));
