@@ -849,8 +849,14 @@ impl Tty {
             }
         };
 
-        if render_node == Some(self.primary_render_node) && self.dmabuf_global.is_none() {
-            let render_node = self.primary_render_node;
+        if (render_node == Some(self.primary_render_node) || uses_software_renderer)
+            && self.dmabuf_global.is_none()
+        {
+            // Software renderers have no render node, so `render_node` above is
+            // whichever node got registered with the GPU manager; prefer it over the primary
+            // render node so that `single_renderer` below actually finds it.
+
+            let render_node = render_node.unwrap_or(self.primary_render_node);
             debug!("initializing the primary renderer");
             self.primary_renderer_is_software = uses_software_renderer;
 
