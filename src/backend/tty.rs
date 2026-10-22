@@ -838,9 +838,7 @@ impl Tty {
                 (Some(render_node), false)
             }
             Ok((render_node, true)) => {
-                warn!(
-                    "using software EGL renderer as a fallback for {node}"
-                );
+                warn!("using software EGL renderer as a fallback for {node}");
                 (Some(render_node), true)
             }
             Err(err) => {
